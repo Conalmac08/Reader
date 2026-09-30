@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blink Reader</title>
+<meta name="description" content="Speed-read your PDFs, EPUBs and text files one word at a time. Your library and reading position are saved automatically.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23151922'/%3E%3Cpath d='M16 5v5M16 22v5' stroke='%23e0284f' stroke-width='2.5' stroke-linecap='round'/%3E%3Ctext x='16' y='21' font-family='Georgia,serif' font-size='13' font-weight='700' text-anchor='middle' fill='%23ffffff'%3El%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..600&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path class="fill" d="M8.5 5.8v12.4a.8.8 0 0 0 1.2.7l10-6.2a.8.8 0 0 0 0-1.4l-10-6.2a.8.8 0 0 0-1.2.7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect class="fill" x="6.5" y="5.5" width="3.8" height="13" rx="1"/><rect class="fill" x="13.7" y="5.5" width="3.8" height="13" rx="1"/></symbol>
+  <symbol id="i-prev-word" viewBox="0 0 24 24"><path d="M14.5 7l-5 5 5 5"/></symbol>
+  <symbol id="i-next-word" viewBox="0 0 24 24"><path d="M9.5 7l5 5-5 5"/></symbol>
+  <symbol id="i-prev-sentence" viewBox="0 0 24 24"><path d="M11.5 7l-5 5 5 5M17.5 7l-5 5 5 5"/></symbol>
+  <symbol id="i-next-sentence" viewBox="0 0 24 24"><path d="M6.5 7l5 5-5 5M12.5 7l5 5-5 5"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+  <symbol id="i-contents" viewBox="0 0 24 24"><path d="M9 7h11M9 12h11M9 17h11"/><circle class="fill" cx="4.8" cy="7" r="1.1"/><circle class="fill" cx="4.8" cy="12" r="1.1"/><circle class="fill" cx="4.8" cy="17" r="1.1"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4.5M7.5 9L12 4.5 16.5 9M4.5 14.5v4a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2a1 1 0 0 0 1 .8h7.2a1 1 0 0 0 1-.8L17.5 7M10.2 10.5v6M13.8 10.5v6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7.5 18.5h9.8a4 4 0 0 0 .6-7.95A5.6 5.6 0 0 0 7 9.3a4.6 4.6 0 0 0 .5 9.2z"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17z"/><path d="M12 10v4M12 16.8v.2"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- Library -->
+  <section id="libraryView" class="library" aria-labelledby="libHeading">
+    <header class="lib-bar">
+      <div class="wordmark" aria-label="Blink">B<span class="wm-focal">l</span>ink</div>
+      <p class="sync-state" id="syncState"><svg class="icon"><use href="#i-device"/></svg><span id="syncText">Saved in this browser</span></p>
+    </header>
+
+    <div class="lib-hero">
+      <div class="lib-intro">
+        <h1 id="libHeading" class="lib-title">Read a whole book, one word at a time.</h1>
+        <p class="lib-lede">Add a PDF and Blink flashes it word by word, right where your eyes already are. Set the pace, pause for context, and pick up where you left off. Every book you add stays in your library.</p>
+      </div>
+      <div class="demo" aria-hidden="true">
+        <div class="demo-screen">
+          <div class="rsvp demo-rsvp">
+            <span class="guide guide-top"></span>
+            <span class="guide guide-bottom"></span>
+            <div class="word" id="demoWord"><span class="w-left"></span><span class="w-focal"></span><span class="w-right"></span></div>
+          </div>
+        </div>
+        <div class="demo-caption"><span>Live preview</span><span class="demo-wpm">300 wpm</span></div>
+      </div>
+    </div>
+
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" class="visually-hidden" accept=".pdf,.epub,.txt,.md,application/pdf,application/epub+zip,text/plain,text/markdown" multiple>
+      <span class="dz-icon"><svg class="icon"><use href="#i-upload"/></svg></span>
+      <span class="dz-text">
+        <span class="dz-main">Drop a PDF here, or <span class="dz-link">choose a file</span></span>
+        <span class="dz-sub">EPUB and plain text work too. Text is pulled out of the file right here in your browser.</span>
+      </span>
+    </label>
+
+    <div id="imports" class="imports" aria-live="polite"></div>
+
+    <div class="shelf-head">
+      <h2 class="shelf-title">Your library</h2>
+      <span id="shelfCount" class="shelf-count"></span>
+    </div>
+    <ol id="shelf" class="shelf"></ol>
+    <p id="shelfEmpty" class="shelf-empty" hidden>Your library is empty. Add a PDF above and it will appear here.</p>
+  </section>
+
+  <!-- Reader -->
+  <section id="readerView" class="reader" hidden aria-label="Reader" data-font="serif">
+    <header class="reader-bar chrome">
+      <button type="button" class="btn-ghost" id="backBtn"><svg class="icon"><use href="#i-back"/></svg><span>Library</span></button>
+      <div class="reader-heading">
+        <div class="reader-title" id="bookTitle"></div>
+        <div class="reader-where" id="bookWhere"></div>
+      </div>
+      <div class="bar-actions">
+        <button type="button" class="icon-btn" id="contentsBtn" aria-label="Contents and search" title="Contents and search (C)"><svg class="icon"><use href="#i-contents"/></svg></button>
+        <button type="button" class="icon-btn" id="settingsBtn" aria-label="Reading settings" title="Reading settings (S)"><svg class="icon"><use href="#i-sliders"/></svg></button>
+        <button type="button" class="icon-btn" id="fullscreenBtn" aria-label="Full screen" title="Full screen (F)"><svg class="icon"><use href="#i-expand"/></svg></button>
+      </div>
+    </header>
+
+    <div class="stage">
+      <div class="rsvp stage-main" id="stageMain" role="button" tabindex="0" aria-label="Play or pause">
+        <span class="guide guide-top"></span>
+        <span class="guide guide-bottom"></span>
+        <div class="word" id="word" aria-hidden="true"><span class="w-left"></span><span class="w-focal"></span><span class="w-right"></span></div>
+        <p class="stage-note" id="stageNote"></p>
+      </div>
+      <section class="context" id="context" aria-label="Surrounding text" hidden></section>
+    </div>
+
+    <footer class="dock chrome">
+      <div class="scrub">
+        <div class="scrub-track">
+          <div class="scrub-ticks" id="scrubTicks" aria-hidden="true"></div>
+          <input type="range" id="scrubber" min="0" max="0" value="0" step="1" aria-label="Position in book">
+        </div>
+        <div class="scrub-meta">
+          <span id="posLabel"></span>
+          <span id="timeLeft"></span>
+        </div>
+      </div>
+      <div class="controls">
+        <p class="session" id="sessionLabel"></p>
+        <div class="transport">
+          <button type="button" class="icon-btn" id="prevSentence" aria-label="Back one sentence" title="Back one sentence (Shift + Left)"><svg class="icon"><use href="#i-prev-sentence"/></svg></button>
+          <button type="button" class="icon-btn" id="prevWord" aria-label="Back one word" title="Back one word (Left)"><svg class="icon"><use href="#i-prev-word"/></svg></button>
+          <button type="button" class="play" id="playBtn" aria-label="Play" title="Play or pause (Space)"><svg class="icon icon-play"><use href="#i-play"/></svg><svg class="icon icon-pause"><use href="#i-pause"/></svg></button>
+          <button type="button" class="icon-btn" id="nextWord" aria-label="Forward one word" title="Forward one word (Right)"><svg class="icon"><use href="#i-next-word"/></svg></button>
+          <button type="button" class="icon-btn" id="nextSentence" aria-label="Forward one sentence" title="Forward one sentence (Shift + Right)"><svg class="icon"><use href="#i-next-sentence"/></svg></button>
+        </div>
+        <div class="speed" role="group" aria-label="Reading speed">
+          <button type="button" class="speed-btn" id="slowerBtn" aria-label="Slower" title="Slower (Down)"><svg class="icon"><use href="#i-minus"/></svg></button>
+          <div class="speed-readout">
+            <button type="button" class="wpm-display" id="wpmDisplay" title="Click to type a speed"><span class="digits" id="wpmDigits"></span></button>
+            <input type="text" id="wpmInput" class="wpm-input" inputmode="numeric" maxlength="4" aria-label="Words per minute" hidden>
+            <span class="wpm-unit">words / min</span>
+          </div>
+          <button type="button" class="speed-btn" id="fasterBtn" aria-label="Faster" title="Faster (Up)"><svg class="icon"><use href="#i-plus"/></svg></button>
+        </div>
+      </div>
+    </footer>
+  </section>
+
+  <!-- Sheets -->
+  <div class="scrim" id="scrim" hidden></div>
+
+  <aside class="sheet" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+    <header class="sheet-head">
+      <h2 id="settingsTitle">Reading settings</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close settings"><svg class="icon"><use href="#i-close"/></svg></button>
+    </header>
+    <div class="sheet-body">
+      <section class="set">
+        <h3 class="set-label">Speed presets</h3>
+        <div class="chips" id="wpmPresets">
+          <button type="button" data-wpm="200">200</button>
+          <button type="button" data-wpm="250">250</button>
+          <button type="button" data-wpm="300">300</button>
+          <button type="button" data-wpm="400">400</button>
+          <button type="button" data-wpm="500">500</button>
+          <button type="button" data-wpm="600">600</button>
+          <button type="button" data-wpm="800">800</button>
+          <button type="button" data-wpm="1000">1000</button>
+        </div>
+      </section>
+      <section class="set">
+        <h3 class="set-label" id="chunkLabel">Words per flash</h3>
+        <div class="segmented" data-setting="chunk" role="group" aria-labelledby="chunkLabel">
+          <button type="button" data-value="1">One</button>
+          <button type="button" data-value="2">Two</button>
+          <button type="button" data-value="3">Three</button>
+        </div>
+      </section>
+      <section class="set set-toggles">
+        <label class="toggle" for="optPacing"><span class="toggle-text"><strong>Smart pacing</strong><small>Linger on punctuation, long words and paragraph ends</small></span><input type="checkbox" id="optPacing" data-setting="pacing"><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle" for="optRamp"><span class="toggle-text"><strong>Warm-up</strong><small>Ease into your speed each time you press play</small></span><input type="checkbox" id="optRamp" data-setting="ramp"><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle" for="optFocal"><span class="toggle-text"><strong>Focal letter</strong><small>Colour the letter your eye should rest on</small></span><input type="checkbox" id="optFocal" data-setting="focal"><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle" for="optGuides"><span class="toggle-text"><strong>Guide marks</strong><small>Show the lines above and below the word</small></span><input type="checkbox" id="optGuides" data-setting="guides"><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle" for="optContext"><span class="toggle-text"><strong>Text on pause</strong><small>Show the surrounding passage whenever you pause</small></span><input type="checkbox" id="optContext" data-setting="context"><span class="switch" aria-hidden="true"></span></label>
+      </section>
+      <section class="set">
+        <h3 class="set-label" id="fontLabel">Typeface</h3>
+        <div class="segmented segmented-fonts" data-setting="font" role="group" aria-labelledby="fontLabel">
+          <button type="button" data-value="serif" class="ff-serif">Literata</button>
+          <button type="button" data-value="sans" class="ff-sans">Atkinson</button>
+          <button type="button" data-value="mono" class="ff-mono">Plex Mono</button>
+        </div>
+      </section>
+      <section class="set">
+        <div class="set-row">
+          <label class="set-label" for="optSize">Text size</label>
+          <output id="sizeOut" for="optSize">100%</output>
+        </div>
+        <input type="range" id="optSize" min="60" max="160" step="5" value="100">
+      </section>
+      <section class="set">
+        <h3 class="set-label" id="themeLabel">Theme</h3>
+        <div class="segmented" data-setting="theme" role="group" aria-labelledby="themeLabel">
+          <button type="button" data-value="auto">Auto</button>
+          <button type="button" data-value="light">Light</button>
+          <button type="button" data-value="sepia">Sepia</button>
+          <button type="button" data-value="dark">Dark</button>
+        </div>
+      </section>
+      <section class="set">
+        <h3 class="set-label">Keyboard</h3>
+        <dl class="keys">
+          <div><dt><kbd>Space</kbd></dt><dd>Play or pause</dd></div>
+          <div><dt><kbd>&larr;</kbd> <kbd>&rarr;</kbd></dt><dd>Back or forward one word</dd></div>
+          <div><dt><kbd>Shift</kbd> + <kbd>&larr;</kbd> <kbd>&rarr;</kbd></dt><dd>Back or forward one sentence</dd></div>
+          <div><dt><kbd>&uarr;</kbd> <kbd>&darr;</kbd></dt><dd>Faster or slower by 25</dd></div>
+          <div><dt><kbd>C</kbd></dt><dd>Contents and search</dd></div>
+          <div><dt><kbd>S</kbd></dt><dd>Settings</dd></div>
+          <div><dt><kbd>F</kbd></dt><dd>Full screen</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>Close a panel, or pause</dd></div>
+        </dl>
+      </section>
+    </div>
+  </aside>
+
+  <aside class="sheet" id="contentsSheet" role="dialog" aria-modal="true" aria-labelledby="contentsTitle" hidden>
+    <header class="sheet-head">
+      <h2 id="contentsTitle">Contents</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close contents"><svg class="icon"><use href="#i-close"/></svg></button>
+    </header>
+    <div class="sheet-body">
+      <form class="search" id="searchForm" role="search">
+        <svg class="icon"><use href="#i-search"/></svg>
+        <input type="search" id="searchInput" placeholder="Search this book" aria-label="Search this book" autocomplete="off">
+        <button type="submit" class="btn-small">Find</button>
+      </form>
+      <div id="searchResults" class="results" aria-live="polite"></div>
+      <form class="goto" id="gotoForm">
+        <label for="gotoPage">Go to page</label>
+        <input type="number" id="gotoPage" min="1" inputmode="numeric">
+        <span class="goto-of" id="gotoOf"></span>
+        <button type="submit" class="btn-small">Go</button>
+      </form>
+      <h3 class="set-label">Chapters</h3>
+      <ol id="chapterList" class="chapters"></ol>
+      <p id="chaptersEmpty" class="muted" hidden>This book didn’t come with a chapter list. Search for a phrase or jump to a page instead.</p>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" hidden><span id="toastText"></span><button type="button" id="toastAction" class="toast-action" hidden></button></div>
+</div>
+
+<script src="js/text.js"></script>
+<script src="js/importers.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
