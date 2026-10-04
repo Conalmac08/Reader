@@ -228,6 +228,19 @@ const BlinkImport = (() => {
     return { b, pageStarts, headings };
   }
 
+  // pdf.js's page.getTextContent() loops over a ReadableStream with
+  // `for await`, which Safari doesn't support, so read the stream by hand.
+  async function readTextItems(page) {
+    const reader = page.streamTextContent().getReader();
+    const items = [];
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value && value.items) for (const item of value.items) items.push(item);
+    }
+    return items;
+  }
+
   async function resolveOutline(doc) {
     let outline;
     try { outline = await doc.getOutline(); } catch { return []; }
@@ -284,8 +297,7 @@ const BlinkImport = (() => {
       for (let p = 1; p <= doc.numPages; p++) {
         try {
           const page = await doc.getPage(p);
-          const content = await page.getTextContent();
-          pages.push(linesFromItems(content.items || []));
+          pages.push(linesFromItems(await readTextItems(page)));
           try { page.cleanup(); } catch { /* nothing to free */ }
         } catch (e) {
           console.warn(`Blink: skipped page ${p}`, e);
