@@ -44,7 +44,7 @@
     scrubber: $('scrubber'), scrubTicks: $('scrubTicks'), posLabel: $('posLabel'), timeLeft: $('timeLeft'),
     session: $('sessionLabel'), playBtn: $('playBtn'),
     wpmDisplay: $('wpmDisplay'), wpmDigits: $('wpmDigits'), wpmInput: $('wpmInput'),
-    scrim: $('scrim'), settingsSheet: $('settingsSheet'), contentsSheet: $('contentsSheet'),
+    scrim: $('scrim'), settingsSheet: $('settingsSheet'), contentsSheet: $('contentsSheet'), accountSheet: $('accountSheet'),
     chapterList: $('chapterList'), chaptersEmpty: $('chaptersEmpty'),
     searchForm: $('searchForm'), searchInput: $('searchInput'), searchResults: $('searchResults'),
     gotoForm: $('gotoForm'), gotoPage: $('gotoPage'), gotoOf: $('gotoOf'),
@@ -682,18 +682,22 @@
   /* ---------- Sheets ---------- */
 
   let lastFocus = null;
-  const isSheetOpen = () => !el.settingsSheet.hidden || !el.contentsSheet.hidden;
+  const sheets = () => [el.settingsSheet, el.contentsSheet, el.accountSheet];
+  const isSheetOpen = () => sheets().some((sh) => !sh.hidden);
 
   function openSheet(sheet) {
-    if (!R.book) return;
-    const other = sheet === el.settingsSheet ? el.contentsSheet : el.settingsSheet;
-    other.hidden = true;
+    if (!R.book && sheet !== el.accountSheet) return;
+    sheets().forEach((sh) => { if (sh !== sheet) sh.hidden = true; });
     if (R.playing) pause();
     lastFocus = document.activeElement;
     sheet.hidden = false;
     el.scrim.hidden = false;
     showChrome();
-    const first = sheet === el.contentsSheet ? el.searchInput : sheet.querySelector('[data-close]');
+    let first = sheet === el.contentsSheet ? el.searchInput : sheet.querySelector('[data-close]');
+    if (sheet === el.accountSheet) {
+      renderAccount();
+      if (!$('accountSignedOut').hidden) first = $('authEmail');
+    }
     if (sheet === el.contentsSheet) {
       const cur = el.chapterList.querySelector('.is-current');
       if (cur) cur.scrollIntoView({ block: 'center' });
@@ -703,9 +707,8 @@
   function closeSheets() {
     if (!isSheetOpen()) return false;
     const active = document.activeElement;
-    const inside = active && (el.settingsSheet.contains(active) || el.contentsSheet.contains(active));
-    el.settingsSheet.hidden = true;
-    el.contentsSheet.hidden = true;
+    const inside = active && sheets().some((sh) => sh.contains(active));
+    sheets().forEach((sh) => { sh.hidden = true; });
     el.scrim.hidden = true;
     if (inside) active.blur();
     const back = lastFocus && lastFocus !== document.body && document.contains(lastFocus) ? lastFocus : (R.book ? el.stageMain : null);
@@ -887,6 +890,7 @@
 
   function renderSyncState() {
     const s = BlinkStore.status();
+    const signedOut = s.account.configured && !s.account.email;
     let icon = 'i-device';
     let text = 'Saved in this browser';
     let warn = false;
@@ -903,11 +907,145 @@
       text = 'Syncing your library…';
     } else if (s.cloud === 'synced') {
       icon = 'i-cloud';
-      text = 'Synced to your account';
+      text = s.account.email ? `Synced as ${s.account.email}` : 'Synced to your account';
     }
     el.syncState.classList.toggle('is-warning', warn);
     el.syncState.querySelector('use').setAttribute('href', `#${icon}`);
     el.syncText.textContent = text;
+    if (signedOut && !warn) {
+      const cta = document.createElement('span');
+      cta.className = 'sync-cta';
+      cta.textContent = ' · Sign in to sync';
+      el.syncText.appendChild(cta);
+    }
+    if (!el.accountSheet.hidden) renderAccount();
+  }
+
+  /* ---------- Account and sync ---------- */
+
+  function renderAccount() {
+    const s = BlinkStore.status();
+    const { configured, email } = s.account;
+    $('accountSignedOut').hidden = !configured || !!email;
+    $('accountSignedIn').hidden = !configured || !email;
+    $('accountOff').hidden = configured;
+    if (email) {
+      $('accountEmail').textContent = email;
+      $('accountStatus').textContent = s.message
+        || (s.cloud === 'syncing' ? 'Syncing your library…' : 'Your library is up to date on this device.');
+    }
+    if (!configured) {
+      $('accountOffText').textContent = s.cloud === 'synced'
+        ? 'Your library syncs through your Claude account automatically, so it is the same wherever you open this page.'
+        : 'Sync isn’t switched on for this copy of Blink, so books are kept only in this browser. To turn it on, add a Supabase project’s URL and key to js/config.js (the README explains how).';
+    }
+  }
+
+  function authMessage(text, isError) {
+    const msg = $('authMsg');
+    msg.textContent = text;
+    msg.classList.toggle('is-error', !!isError);
+    msg.hidden = !text;
+  }
+
+  function friendlyAuthError(e) {
+    const m = (e && e.message) || '';
+    if (/invalid login/i.test(m)) return 'That email and password don’t match an account. Check them, or create an account.';
+    if (/not confirmed/i.test(m)) return 'Confirm your email first: open the link in the email we sent you, then sign in here.';
+    if (/already (registered|exists)/i.test(m)) return 'There’s already an account with that email. Sign in instead.';
+    if (/password.*(at least|short|characters)/i.test(m)) return 'Use a password with at least 6 characters.';
+    if (/rate limit|too many|security purposes/i.test(m)) return 'Too many tries in a row. Wait a minute, then try again.';
+    if (/fetch|network|load/i.test(m) || (e && e.name === 'TypeError')) return 'Couldn’t reach the sync service. Check your connection and try again.';
+    return m || 'Something went wrong. Try again.';
+  }
+
+  async function authAction(button, needsPassword, run) {
+    const email = $('authEmail').value.trim();
+    const password = $('authPassword').value;
+    if (!/^\S+@\S+\.\S+$/.test(email)) { authMessage('Enter your email address.', true); $('authEmail').focus(); return; }
+    if (needsPassword && password.length < 6) { authMessage('Enter a password of at least 6 characters.', true); $('authPassword').focus(); return; }
+    const buttons = el.accountSheet.querySelectorAll('.auth button');
+    buttons.forEach((b) => { b.disabled = true; });
+    authMessage('Working…');
+    try {
+      await run(email, password);
+    } catch (e) {
+      console.warn('Blink: sign-in problem', e);
+      authMessage(friendlyAuthError(e), true);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  $('authForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    authAction($('signInBtn'), true, async (email, password) => {
+      await BlinkCloud.signIn(email, password);
+      authMessage('');
+      $('authPassword').value = '';
+      closeSheets();
+      toast('Signed in. Syncing your library…');
+    });
+  });
+  $('signUpBtn').addEventListener('click', () => {
+    authAction($('signUpBtn'), true, async (email, password) => {
+      const ready = await BlinkCloud.signUp(email, password);
+      if (ready) {
+        authMessage('');
+        $('authPassword').value = '';
+        closeSheets();
+        toast('Account created. Syncing your library…');
+      } else {
+        authMessage(`Almost done. We sent a confirmation link to ${email}. Open it, then come back and sign in.`);
+      }
+    });
+  });
+  $('linkBtn').addEventListener('click', () => {
+    authAction($('linkBtn'), false, async (email) => {
+      await BlinkCloud.sendLink(email);
+      authMessage(`Check ${email} for a sign-in link. Opening it signs you in on that device.`);
+    });
+  });
+  $('syncNowBtn').addEventListener('click', async () => {
+    $('syncNowBtn').disabled = true;
+    await syncNow();
+    $('syncNowBtn').disabled = false;
+  });
+  $('signOutBtn').addEventListener('click', async () => {
+    $('signOutBtn').disabled = true;
+    try {
+      await BlinkCloud.signOut();
+      closeSheets();
+      toast('Signed out. Books you read here stay on this device.');
+    } catch (e) {
+      toast('Couldn’t sign out. Check your connection and try again.');
+    } finally {
+      $('signOutBtn').disabled = false;
+    }
+  });
+  el.syncState.addEventListener('click', () => openSheet(el.accountSheet));
+
+  let lastSync = 0;
+  async function syncNow() {
+    lastSync = Date.now();
+    await BlinkStore.sync();
+    if (!R.book) await renderLibrary();
+    else adoptRemoteProgress();
+    renderSyncState();
+  }
+
+  // If this book was read further on another device, pick up from there.
+  async function adoptRemoteProgress() {
+    if (!R.book || R.playing) return;
+    const id = R.book.id;
+    const stored = await BlinkStore.get(id);
+    if (!stored || !R.book || R.book.id !== id || R.playing) return;
+    if ((stored.updatedAt || 0) > (R.book.updatedAt || 0) && stored.position !== R.index) {
+      R.book.updatedAt = stored.updatedAt;
+      for (const k of ['timeSpentMs', 'wordsRead', 'finishedAt']) R.book[k] = stored[k];
+      seek(stored.position);
+      toast('Moved to where you stopped on your other device');
+    }
   }
 
   function confirmDelete(li) {
@@ -1231,6 +1369,7 @@
     }
   });
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !el.accountSheet.hidden) { closeSheets(); return; }
     if (!R.book || el.reader.hidden) return;
     const t = e.target;
     const typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) && t.type !== 'range' && t.type !== 'checkbox';
@@ -1311,6 +1450,9 @@
     if (document.hidden) {
       if (R.playing) pause();
       else persist({ flush: true });
+    } else if (Date.now() - lastSync > 15000) {
+      // Coming back to the tab: pick up anything read on another device.
+      syncNow();
     }
   });
   window.addEventListener('pagehide', () => persist({ flush: true }));
@@ -1327,7 +1469,8 @@
     BlinkStore.onChange(() => {
       if (R.book) renderSyncState(); else renderLibrary();
     });
-    BlinkStore.sync().then(() => { if (!R.book) renderLibrary(); });
+    BlinkCloud.onAuthChange(() => syncNow());
+    syncNow();
     if (hot && hot.bookId) openBook(hot.bookId);
   }
 

@@ -217,8 +217,15 @@ symbol .fill { fill: currentColor; stroke: none; }
 .wm-focal::after { bottom: -6px; }
 .sync-state {
   display: inline-flex; align-items: center; gap: 8px; margin: 0;
+  min-height: 36px; padding: 0 12px;
+  border: 1px solid transparent; border-radius: 999px;
+  background: transparent;
   font-size: 0.85rem; color: var(--ink-3);
+  max-width: 100%;
 }
+.sync-state:hover { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
+.sync-state span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-cta { color: var(--accent); font-weight: 600; }
 .sync-state .icon { width: 18px; height: 18px; }
 .sync-state.is-warning { color: var(--danger); }
 
@@ -707,6 +714,38 @@ kbd {
 .chapters .depth-2 button { padding-left: 42px; font-size: 0.85rem; }
 .chapters .is-current button { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
 .chapters .ch-pct { font: 0.72rem var(--font-num); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.account { display: flex; flex-direction: column; gap: 16px; }
+.account-lede { margin: 0; color: var(--ink-2); line-height: 1.55; }
+.account-who { margin: 0; overflow-wrap: anywhere; }
+.account-status { margin: 0; color: var(--ink-2); font-size: 0.92rem; }
+.auth { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field span { font: 500 0.72rem/1.2 var(--font-num); letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); }
+.field input {
+  height: 44px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); color: var(--ink);
+  font-size: 1rem;
+}
+.field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.auth-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn-primary {
+  height: 40px; padding: 0 18px;
+  border: 0; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-primary:disabled, .btn-small:disabled { opacity: 0.6; cursor: progress; }
+.auth-actions .btn-small { height: 40px; }
+.btn-link {
+  align-self: flex-start; padding: 4px 0;
+  border: 0; background: transparent; color: var(--accent);
+  font-size: 0.9rem; text-decoration: underline; text-underline-offset: 3px;
+}
+.auth-msg { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--ink-2); font-size: 0.92rem; line-height: 1.45; }
+.auth-msg.is-error { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 
 /* ---------- Toast ---------- */
 

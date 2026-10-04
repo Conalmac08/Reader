@@ -39,7 +39,7 @@
   <section id="libraryView" class="library" aria-labelledby="libHeading">
     <header class="lib-bar">
       <div class="wordmark" aria-label="Blink">B<span class="wm-focal">l</span>ink</div>
-      <p class="sync-state" id="syncState"><svg class="icon"><use href="#i-device"/></svg><span id="syncText">Saved in this browser</span></p>
+      <button type="button" class="sync-state" id="syncState" aria-haspopup="dialog"><svg class="icon"><use href="#i-device"/></svg><span id="syncText">Saved in this browser</span></button>
     </header>
 
     <div class="lib-hero">
@@ -237,11 +237,47 @@
     </div>
   </aside>
 
+  <aside class="sheet" id="accountSheet" role="dialog" aria-modal="true" aria-labelledby="accountTitle" hidden>
+    <header class="sheet-head">
+      <h2 id="accountTitle">Sync across devices</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-close"/></svg></button>
+    </header>
+    <div class="sheet-body">
+      <div id="accountSignedOut" class="account">
+        <p class="account-lede">Sign in on each phone, tablet and computer you read on. Your library and your place in every book show up on all of them.</p>
+        <form class="auth" id="authForm" novalidate>
+          <label class="field" for="authEmail"><span>Email</span><input type="email" id="authEmail" autocomplete="email" required></label>
+          <label class="field" for="authPassword"><span>Password</span><input type="password" id="authPassword" autocomplete="current-password" minlength="6"></label>
+          <p class="auth-msg" id="authMsg" role="status" hidden></p>
+          <div class="auth-actions">
+            <button type="submit" class="btn-primary" id="signInBtn">Sign in</button>
+            <button type="button" class="btn-small" id="signUpBtn">Create account</button>
+          </div>
+          <button type="button" class="btn-link" id="linkBtn">Forgot your password? Email me a sign-in link</button>
+        </form>
+      </div>
+      <div id="accountSignedIn" class="account" hidden>
+        <p class="account-who">Signed in as <strong id="accountEmail"></strong></p>
+        <p class="account-status" id="accountStatus"></p>
+        <div class="auth-actions">
+          <button type="button" class="btn-primary" id="syncNowBtn">Sync now</button>
+          <button type="button" class="btn-small" id="signOutBtn">Sign out</button>
+        </div>
+        <p class="muted">Books you add on this device upload automatically. Signing out keeps them here but stops syncing.</p>
+      </div>
+      <div id="accountOff" class="account" hidden>
+        <p class="account-lede" id="accountOffText"></p>
+      </div>
+    </div>
+  </aside>
+
   <div class="toast" id="toast" role="status" hidden><span id="toastText"></span><button type="button" id="toastAction" class="toast-action" hidden></button></div>
 </div>
 
+<script src="js/config.js"></script>
 <script src="js/text.js"></script>
 <script src="js/importers.js"></script>
+<script src="js/cloud.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/app.js"></script>
 </body>

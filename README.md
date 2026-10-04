@@ -17,7 +17,8 @@ Everything runs in the browser. Files are opened on your device, the text is pul
 - **Library with saved progress.** Every book you add is saved in the browser along with your exact position, reading time and progress, so you can close the tab and continue later. Adding the same file twice opens the existing copy.
 - **Themes and type.** Auto, light, sepia and dark themes; Literata, Atkinson Hyperlegible or IBM Plex Mono for the words; adjustable text size.
 - **Focus mode.** While reading, the controls fade out until you move the mouse. The screen is kept awake on phones, and reading pauses when you switch tabs.
-- **Account sync on claude.ai.** When Blink runs as a Claude artifact, your library is also saved to your private artifact storage, so it follows you between devices.
+- **Sync across devices.** Sign in with an email and password and your library, including your place in every book, shows up on your phone, tablet and computer. Sync uses [Supabase](https://supabase.com) (see below). Books are also kept in the browser, so they still open offline.
+- **Pick up where you stopped.** If you read further on another device, Blink moves to that spot the next time you come back to the page.
 
 ## Keyboard shortcuts
 
@@ -46,23 +47,44 @@ Then open <http://localhost:8000>.
 
 To put it online with GitHub Pages, go to **Settings → Pages** in this repository, choose **Deploy from a branch**, pick the branch and the `/ (root)` folder, and save. Any other static host works the same way.
 
+## Turning on sync with Supabase
+
+Without this, each browser keeps its own library. With it, signing in on any device brings up the same books. It takes about five minutes and the free Supabase plan is plenty.
+
+1. Create a free account at [supabase.com](https://supabase.com) and make a new project. Any name, region and database password will do.
+2. In the project, open **SQL Editor**, paste the whole of [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. This creates the two tables Blink uses and the rules that keep each person's books private.
+3. Open **Authentication → URL Configuration** and set **Site URL** to your site's address, for example `https://conalmac08.github.io/Reader/`. Confirmation and sign-in emails link back there.
+   - Optional: under **Authentication → Sign In / Providers → Email**, turn off **Confirm email** if you'd rather skip the confirmation email when creating your account.
+4. Open **Project Settings → API** (or **API Keys**) and copy the **Project URL** and the **anon** / **publishable** key.
+5. Paste both into [`js/config.js`](js/config.js) and commit. GitHub Pages republishes the site within a minute or two.
+
+Then open the site, click **Sign in to sync** at the top of the library, and create your account. Sign in with the same email and password on your other devices.
+
+The URL and anon key are designed to be public. Supabase only lets a signed-in person read or change rows with their own user id, as set out in `schema.sql`.
+
 ## Where books are stored
 
-Books live in your browser's IndexedDB storage for the site. Clearing site data for the page removes them. Reading settings such as speed and theme are kept in `localStorage`.
+Books always live in your browser's IndexedDB storage for the site, which is what lets them open offline. Reading settings such as speed and theme are kept in `localStorage` per device.
 
-When the page is opened as a claude.ai artifact, the library is mirrored under `data/users/<your id>/` in the artifact's database, which only you can read. Book text is stored there in chunks under each book's record.
+With sync on, each book's details and reading progress are stored in the `books` table and its text in `book_texts`, split into pieces of up to 400,000 characters. Deleting a book on one device removes its text from Supabase and marks the book deleted so your other devices drop it too.
+
+When the page runs as a claude.ai artifact instead, the library is mirrored to the artifact's own private storage.
 
 ## Project layout
 
 ```
-index.html        page structure and icons
-css/styles.css    all styles and the colour themes
-js/text.js        splitting text into words, focal letter, pacing
-js/importers.js   PDF, EPUB and text import
-js/storage.js     the library (IndexedDB, plus optional sync)
-js/app.js         library view, reader view and playback
-lib/pdfjs/        PDF.js 6.3.289 (Apache 2.0)
-lib/jszip/        JSZip 3.10.2 (MIT), used for EPUB files
+index.html          page structure and icons
+css/styles.css      all styles and the colour themes
+js/config.js        your Supabase URL and key (empty = no sync)
+js/text.js          splitting text into words, focal letter, pacing
+js/importers.js     PDF, EPUB and text import
+js/cloud.js         sign-in and the Supabase / claude.ai sync adapters
+js/storage.js       the library (IndexedDB) and merging with synced data
+js/app.js           library view, reader view and playback
+supabase/schema.sql tables and privacy rules to run in Supabase
+lib/pdfjs/          PDF.js 6.3.289 (Apache 2.0)
+lib/jszip/          JSZip 3.10.2 (MIT), used for EPUB files
+lib/supabase/       supabase-js 2.117.2 (MIT), loaded only when sync is set up
 ```
 
 ## Limits
