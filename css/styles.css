@@ -303,6 +303,11 @@ symbol .fill { fill: currentColor; stroke: none; }
 .import-row.is-error { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
 .import-error { grid-column: 1 / -1; margin: 0; color: var(--danger); font-size: 0.92rem; display: flex; gap: 8px; align-items: flex-start; }
 .import-error .icon { width: 18px; height: 18px; margin-top: 2px; }
+.import-error > span { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.import-detail {
+  font: 0.75rem/1.4 var(--font-num); color: var(--ink-3);
+  overflow-wrap: anywhere; user-select: text; -webkit-user-select: text;
+}
 
 .shelf-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: -12px; }
 .shelf-title { margin: 0; font: 600 1.25rem/1.2 var(--font-display); }

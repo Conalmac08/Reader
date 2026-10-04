@@ -7,7 +7,15 @@
 const BlinkImport = (() => {
   const { clean, countWords, looksLikeHeading } = BlinkText;
 
-  class ImportError extends Error {}
+  // A problem worth explaining to the reader. `cause` keeps the underlying
+  // error, if any, so the message can show what actually went wrong.
+  class ImportError extends Error {
+    constructor(message, cause) {
+      super(message);
+      this.name = 'ImportError';
+      this.cause = cause;
+    }
+  }
 
   const assetUrl = (path) => new URL(path, document.baseURI).href;
 
@@ -62,7 +70,7 @@ const BlinkImport = (() => {
     const clamp = (w) => Math.max(0, Math.min(total - 1, w));
     const seen = new Set();
     const chapters = (fields.chapters || [])
-      .filter((c) => c && c.title && Number.isFinite(c.word))
+      .filter((c) => c && typeof c.title === 'string' && c.title.trim() && Number.isFinite(c.word))
       .map((c) => ({ title: c.title.replace(/\s+/g, ' ').trim().slice(0, 140), word: clamp(c.word), depth: c.depth || 0 }))
       .sort((a, b) => a.word - b.word)
       .filter((c) => {
@@ -82,14 +90,19 @@ const BlinkImport = (() => {
     };
   }
 
+  const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
+  const titleCase = (t) => t.split(' ').map((w, i) => (i > 0 && SMALL_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+
   function titleFrom(metaTitle, fileName) {
     let t = (metaTitle || '').replace(/\s+/g, ' ').trim()
       .replace(/^microsoft (word|powerpoint)\s*-\s*/i, '')
       .replace(/\.(docx?|pdf|indd|epub|txt|rtf|pptx?)$/i, '');
     if (!t || t.length < 2 || t.length > 160 || /^(untitled|unknown|document|title|none)\b/i.test(t) || /^(about:|https?:|file:|[a-z]:\\)/i.test(t) || !/\p{L}/u.test(t)) {
-      t = fileName.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+      t = fileName.replace(/\.[^.]+$/, '');
+      if (!/\s/.test(t)) t = t.replace(/[-_.]+/g, ' ');
+      t = t.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
     }
-    if (t && t === t.toLowerCase()) t = t.charAt(0).toUpperCase() + t.slice(1);
+    if (t && t === t.toLowerCase()) t = titleCase(t);
     return t || 'Untitled';
   }
 
@@ -232,7 +245,7 @@ const BlinkImport = (() => {
             page = typeof ref === 'object' ? await doc.getPageIndex(ref) : (Number.isInteger(ref) ? ref : null);
           }
         } catch { page = null; }
-        if (page != null && item.title) out.push({ title: item.title, page, depth });
+        if (page != null && item.title) out.push({ title: String(item.title), page, depth });
         if (item.items && item.items.length && depth < 2) await walk(item.items, depth + 1);
       }
     }
@@ -247,27 +260,43 @@ const BlinkImport = (() => {
     } catch {
       throw new ImportError('The PDF engine could not load. If you opened Blink straight from a file on your computer, run it from a web server instead (the README explains how).');
     }
-    const data = new Uint8Array(await file.arrayBuffer());
-    // Only text is needed, so fonts are never loaded into the page and
-    // pdf.js's warnings about missing font files are silenced.
-    const task = pdfjs.getDocument({ data, disableFontFace: true, verbosity: 0 });
+    let task = null;
     let doc;
     try {
+      const data = new Uint8Array(await file.arrayBuffer());
+      // Only text is needed, so fonts are never loaded into the page and
+      // pdf.js's warnings about missing font files are silenced.
+      task = pdfjs.getDocument({ data, disableFontFace: true, verbosity: 0 });
       doc = await task.promise;
     } catch (e) {
+      if (task) task.destroy();
       if (e && e.name === 'PasswordException') throw new ImportError('This PDF is locked with a password. Save an unlocked copy and add that instead.');
-      throw new ImportError('This file could not be read as a PDF. It may be damaged or not really a PDF.');
+      throw new ImportError('This file could not be opened as a PDF. It may be damaged or not really a PDF.', e);
     }
     try {
       let info = {};
       try { info = (await doc.getMetadata())?.info || {}; } catch { info = {}; }
       const pages = [];
+      let skipped = 0;
+      let lastError = null;
+      // A damaged or unusual page shouldn't sink the whole book: skip it
+      // and keep going.
       for (let p = 1; p <= doc.numPages; p++) {
-        const page = await doc.getPage(p);
-        const content = await page.getTextContent();
-        pages.push(linesFromItems(content.items));
-        page.cleanup();
+        try {
+          const page = await doc.getPage(p);
+          const content = await page.getTextContent();
+          pages.push(linesFromItems(content.items || []));
+          try { page.cleanup(); } catch { /* nothing to free */ }
+        } catch (e) {
+          console.warn(`Blink: skipped page ${p}`, e);
+          skipped++;
+          lastError = e;
+          pages.push([]);
+        }
         onProgress?.({ unit: 'page', done: p, total: doc.numPages });
+      }
+      if (doc.numPages && skipped === doc.numPages) {
+        throw new ImportError('Blink couldn’t read the text on any page of this PDF.', lastError);
       }
       const outline = await resolveOutline(doc);
       const { b, pageStarts, headings } = assemblePdf(pages);
@@ -277,12 +306,13 @@ const BlinkImport = (() => {
       const chapters = outline.length
         ? outline.filter((o) => o.page < pageStarts.length).map((o) => ({ title: o.title, word: pageStarts[o.page], depth: o.depth }))
         : headings;
-      return finish(b, {
-        title: titleFrom(info.Title, file.name),
+      const book = finish(b, {
+        title: titleFrom(typeof info.Title === 'string' ? info.Title : '', file.name),
         author: typeof info.Author === 'string' ? info.Author.trim() : '',
         pageStarts,
         chapters,
       });
+      return { ...book, skippedPages: skipped };
     } finally {
       task.destroy();
     }
@@ -417,13 +447,18 @@ const BlinkImport = (() => {
     for (let i = 0; i < spine.length; i++) {
       const path = spine[i].path;
       anchors.set(path, b.words);
-      const src = await read(path);
-      if (src) extractHtml(src, path, b, anchors);
+      try {
+        const src = await read(path);
+        if (src) extractHtml(src, path, b, anchors);
+      } catch (e) {
+        console.warn(`Blink: skipped ${path}`, e);
+      }
       onProgress?.({ unit: 'section', done: i + 1, total: spine.length });
     }
     if (!b.words) throw new ImportError('This EPUB does not contain any readable text.');
 
-    const toc = await readToc(zip, opf, manifest, baseDir);
+    let toc = [];
+    try { toc = await readToc(zip, opf, manifest, baseDir); } catch (e) { console.warn('Blink: no table of contents', e); }
     const chapters = toc.map((t) => ({
       title: t.title,
       word: anchors.get(t.frag ? `${t.path}#${t.frag}` : t.path) ?? anchors.get(t.path),

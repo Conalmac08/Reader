@@ -1123,7 +1123,7 @@
         fill.style.width = `${(done / total) * 100}%`;
         step.textContent = `${unit === 'page' ? 'Page' : 'Section'} ${fmt(done)} of ${fmt(total)}`;
       },
-      fail(message) {
+      fail(message, detail) {
         row.classList.add('is-error');
         title.textContent = `Couldn’t add “${name}”`;
         step.replaceChildren();
@@ -1138,11 +1138,25 @@
         err.className = 'import-error';
         err.setAttribute('role', 'alert');
         err.innerHTML = '<svg class="icon"><use href="#i-alert"/></svg>';
-        err.append(message);
+        const text = document.createElement('span');
+        text.append(message);
+        if (detail) {
+          const small = document.createElement('small');
+          small.className = 'import-detail';
+          small.textContent = `Details: ${detail}`;
+          text.append(small);
+        }
+        err.append(text);
         bar.replaceWith(err);
       },
       remove() { row.remove(); },
     };
+  }
+
+  function errorDetail(e) {
+    if (!e) return '';
+    const text = `${e.name && e.name !== 'Error' ? `${e.name}: ` : ''}${e.message || String(e)}`;
+    return text.length > 220 ? `${text.slice(0, 217)}…` : text;
   }
 
   async function importFiles(fileList) {
@@ -1150,28 +1164,38 @@
     if (!files.length) return;
     let lastAdded = null;
     for (const file of files) {
-      const dup = await BlinkStore.findDuplicate(file.name, file.size);
-      if (dup) {
-        toast(`“${dup.title}” is already in your library`, { label: 'Open', run: () => openBook(dup.id) });
-        const card = el.shelf.querySelector(`[data-id="${dup.id}"]`);
-        if (card) { card.classList.remove('is-flash'); void card.offsetWidth; card.classList.add('is-flash'); }
+      const row = importRow(file.name);
+      let book;
+      try {
+        const dup = await BlinkStore.findDuplicate(file.name, file.size);
+        if (dup) {
+          row.remove();
+          toast(`“${dup.title}” is already in your library`, { label: 'Open', run: () => openBook(dup.id) });
+          const card = el.shelf.querySelector(`[data-id="${dup.id}"]`);
+          if (card) { card.classList.remove('is-flash'); void card.offsetWidth; card.classList.add('is-flash'); }
+          continue;
+        }
+        book = await BlinkImport.importFile(file, (p) => row.progress(p));
+      } catch (e) {
+        (e instanceof BlinkImport.ImportError ? console.warn : console.error)(e);
+        if (e instanceof BlinkImport.ImportError) row.fail(e.message, e.cause ? errorDetail(e.cause) : '');
+        else row.fail('Blink couldn’t read the text in this file.', errorDetail(e));
         continue;
       }
-      const row = importRow(file.name);
+      let saved;
       try {
-        const book = await BlinkImport.importFile(file, (p) => row.progress(p));
-        const saved = await BlinkStore.addBook(book, book.text);
-        row.remove();
-        lastAdded = saved;
-        await renderLibrary();
+        saved = await BlinkStore.addBook(book, book.text);
       } catch (e) {
-        if (e instanceof BlinkImport.ImportError) {
-          row.fail(e.message);
-        } else {
-          console.error(e);
-          row.fail('Something went wrong while reading this file. Try another copy of it, or a different format.');
-        }
+        console.error(e);
+        row.fail('Blink read the book but couldn’t save it in this browser. If you’re in a private window, switch to a normal one. Otherwise, close other tabs and try again.', errorDetail(e));
+        continue;
       }
+      row.remove();
+      lastAdded = saved;
+      if (book.skippedPages) {
+        toast(`Added “${saved.title}”. ${book.skippedPages} ${book.skippedPages === 1 ? 'page' : 'pages'} couldn’t be read and were skipped.`);
+      }
+      try { await renderLibrary(); } catch (e) { console.error(e); }
     }
     if (!lastAdded) return;
     if (files.length === 1 && !R.book) {

@@ -17,7 +17,7 @@ const BlinkStore = (() => {
 
   function openDb() {
     if (!dbPromise) {
-      dbPromise = new Promise((resolve, reject) => {
+      const current = new Promise((resolve, reject) => {
         let req;
         try {
           req = indexedDB.open(DB_NAME, 1);
@@ -30,7 +30,14 @@ const BlinkStore = (() => {
           if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
           if (!db.objectStoreNames.contains('texts')) db.createObjectStore('texts', { keyPath: 'id' });
         };
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+          const db = req.result;
+          // Safari can drop the connection while the page is in the
+          // background (for example while the file picker is open).
+          db.onclose = () => { if (dbPromise === current) dbPromise = null; };
+          db.onversionchange = () => { db.close(); if (dbPromise === current) dbPromise = null; };
+          resolve(db);
+        };
         req.onerror = () => reject(req.error);
         req.onblocked = () => reject(new Error('blocked'));
       }).catch((e) => {
@@ -38,23 +45,36 @@ const BlinkStore = (() => {
         console.warn('Blink: IndexedDB unavailable, keeping books in memory only.', e);
         return null;
       });
+      dbPromise = current;
     }
     return dbPromise;
   }
 
-  async function run(store, mode, fn) {
+  const LOST_CONNECTION = /^(InvalidStateError|UnknownError|TransactionInactiveError|AbortError)$/;
+
+  async function run(store, mode, fn, retry = true) {
     const db = await openDb();
     if (!db) return fn(null, memory[store]);
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, mode);
-      const os = tx.objectStore(store);
-      let result;
-      const req = fn(os, null);
-      if (req) req.onsuccess = () => { result = req.result; };
-      tx.oncomplete = () => resolve(result);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(store, mode);
+        const os = tx.objectStore(store);
+        let result;
+        const req = fn(os, null);
+        if (req) req.onsuccess = () => { result = req.result; };
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
+      });
+    } catch (e) {
+      // Reconnect once if the browser closed the database under us.
+      if (retry && e && LOST_CONNECTION.test(e.name)) {
+        try { db.close(); } catch { /* already closed */ }
+        dbPromise = null;
+        return run(store, mode, fn, false);
+      }
+      throw e;
+    }
   }
 
   const getAll = (store) => run(store, 'readonly', (os, mem) => (os ? os.getAll() : [...mem.values()]));
